@@ -4,7 +4,7 @@ namespace myEngine {
 class graphicsAPI
 {
 public:
-	virtual void setup();
+	virtual void setup() {}
 	virtual ~graphicsAPI() {}
 };
 

@@ -17,5 +17,6 @@ public:
 	bool shouldClose();
 private:
 	GLFWwindow* mGLFWWindow;
+
 };
 }

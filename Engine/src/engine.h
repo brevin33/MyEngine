@@ -1,9 +1,9 @@
 #pragma once
 
 #include "window.h"
+#include "graphicsAPI.h"
+
 namespace myEngine {
-
-
 
 class engine
 {
@@ -14,10 +14,12 @@ public:
 	~engine();
 	void run(int width, int heigth);
 private:
+	graphicsAPI mGrapicsAPI;
 	window mWindow;
 
 private:
 	void mainLoop();
+	void setupGraphicsAPI();
 
 };
 

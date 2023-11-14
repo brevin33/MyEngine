@@ -1,7 +1,7 @@
 #pragma once
 
 #include "window.h"
-#include "graphicsAPI.h"
+#include "vulkanAPI.h"
 
 namespace myEngine {
 
@@ -14,12 +14,11 @@ public:
 	~engine();
 	void run(int width, int heigth);
 private:
-	graphicsAPI* mGrapicsAPI;
+	vulkanAPI mGrapicsAPI;
 	Window mWindow;
 
 private:
 	void mainLoop();
-	void setupGraphicsAPI();
 
 };
 

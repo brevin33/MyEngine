@@ -1,11 +1,7 @@
 #pragma once
-#include "graphicsAPI.h"
 #include "definitions.h"
 #include "window.h"
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <string>
-#include <glm/gtx/hash.hpp>
 #include <optional>
 #include <vector>
 #include <array>
@@ -13,6 +9,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/hash.hpp>
+#include "myEngineStructs/mesh.h"
+#include "myEngineStructs/shader.h"
+#include "myEngineStructs/renderTarget.h"
 
 namespace myEngine {
 
@@ -22,19 +21,19 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
-struct Vertex {
+struct Vertex2 {
     glm::vec3 pos;
     glm::vec3 color;
     glm::vec2 texCoord;
 
-    bool operator==(const Vertex& other) const {
+    bool operator==(const Vertex2& other) const {
         return pos == other.pos && color == other.color && texCoord == other.texCoord;
     }
 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription bindingDescription{};
         bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.stride = sizeof(Vertex2);
         bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
         return bindingDescription;
@@ -46,17 +45,17 @@ struct Vertex {
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
         attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+        attributeDescriptions[0].offset = offsetof(Vertex2, pos);
 
         attributeDescriptions[1].binding = 0;
         attributeDescriptions[1].location = 1;
         attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
+        attributeDescriptions[1].offset = offsetof(Vertex2, color);
 
         attributeDescriptions[2].binding = 0;
         attributeDescriptions[2].location = 2;
         attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+        attributeDescriptions[2].offset = offsetof(Vertex2, texCoord);
 
         return attributeDescriptions;
     }
@@ -64,8 +63,8 @@ struct Vertex {
 
 }
 namespace std{
-template<> struct std::hash<myEngine::Vertex> {
-    size_t operator()(myEngine::Vertex const& vertex) const {
+template<> struct std::hash<myEngine::Vertex2> {
+    size_t operator()(myEngine::Vertex2 const& vertex) const {
         return ((std::hash<glm::vec3>()(vertex.pos) ^
             (std::hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
             (std::hash<glm::vec2>()(vertex.texCoord) << 1);
@@ -94,12 +93,13 @@ struct QueueFamilyIndices {
 
 
 
-class vulkanAPI :
-    public graphicsAPI
+class vulkanAPI
 {
 public:
     ~vulkanAPI();
     void setup(Window &window);
+
+    RenderTarget createRenderTarget(Mesh mesh, VulkanGraphicsShader shader);
 
     void drawFrame();
 
@@ -145,7 +145,7 @@ private:
 
 
     VkBuffer vertexBuffer;
-    std::vector<Vertex> vertices;
+    std::vector<Vertex2> vertices;
     std::vector<uint32_t> indices;
     VkDeviceMemory vertexBufferMemory;
     VkBuffer indexBuffer;

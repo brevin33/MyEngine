@@ -135,6 +135,11 @@ void vulkanAPI::setup(Window &window)
 
 }
 
+RenderTarget vulkanAPI::createRenderTarget(Mesh mesh, VulkanGraphicsShader shader)
+{
+    return RenderTarget();
+}
+
 void vulkanAPI::drawFrame()
 {
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
@@ -542,8 +547,8 @@ void vulkanAPI::createGraphicsPipeline()
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-    auto bindingDescription = Vertex::getBindingDescription();
-    auto attributeDescriptions = Vertex::getAttributeDescriptions();
+    auto bindingDescription = Vertex2::getBindingDescription();
+    auto attributeDescriptions = Vertex2::getAttributeDescriptions();
 
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
@@ -778,10 +783,10 @@ void vulkanAPI::loadModel()
         throw std::runtime_error(warn + err);
     }
 
-    std::unordered_map<Vertex, uint32_t> uniqueVertices;
+    std::unordered_map<Vertex2, uint32_t> uniqueVertices;
     for (const auto& shape : shapes) {
         for (const auto& index : shape.mesh.indices) {
-            Vertex vertex{};
+            Vertex2 vertex{};
 
             vertex.pos = {
                 attrib.vertices[3 * index.vertex_index + 0],

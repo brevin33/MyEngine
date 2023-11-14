@@ -14,8 +14,8 @@ public:
 	~engine();
 	void run(int width, int heigth);
 private:
-	graphicsAPI mGrapicsAPI;
-	window mWindow;
+	graphicsAPI* mGrapicsAPI;
+	Window mWindow;
 
 private:
 	void mainLoop();

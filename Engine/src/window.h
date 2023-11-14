@@ -4,15 +4,16 @@
 
 namespace myEngine {
 
-class window
+class Window
 {
 public:
 	bool pFramebufferResized = false;
 	int pWidth;
 	int pHeight;
 public:
-	window();
-	~window();
+	Window();
+	~Window();
+	GLFWwindow* getGLFWWindow();
 	void create(int width, int height);
 	bool shouldClose();
 private:

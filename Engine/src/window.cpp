@@ -3,26 +3,31 @@
 namespace myEngine {
 
 
-class window;
+class Window;
 
-window::window() {
+Window::Window() {
 }
 
-window::~window()
+Window::~Window()
 {
     glfwDestroyWindow(mGLFWWindow);
     glfwTerminate();
 }
 
+GLFWwindow* Window::getGLFWWindow()
+{
+    return mGLFWWindow;
+}
+
 
 static void framebufferResizeCallback(GLFWwindow* w, int width, int height) {
-    auto app = reinterpret_cast<window*>(glfwGetWindowUserPointer(w));
+    auto app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(w));
     app->pFramebufferResized = true;
     app->pWidth = width;
     app->pHeight = height;
 }
 
-void window::create(int width, int height)
+void Window::create(int width, int height)
 {
     pWidth = width;
     pHeight = height;
@@ -35,7 +40,7 @@ void window::create(int width, int height)
     glfwSetFramebufferSizeCallback(mGLFWWindow, framebufferResizeCallback);
 }
 
-bool window::shouldClose()
+bool Window::shouldClose()
 {
     return glfwWindowShouldClose(mGLFWWindow);
 }

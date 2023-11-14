@@ -9,6 +9,7 @@ engine::engine()
 
 engine::~engine()
 {
+	delete mGrapicsAPI;
 }
 
 void engine::run(int width, int height)
@@ -27,9 +28,8 @@ void engine::mainLoop()
 
 void engine::setupGraphicsAPI()
 {
-	vulkanAPI v;
-	v.setup();
-	mGrapicsAPI = v;
+	mGrapicsAPI = new vulkanAPI;
+	mGrapicsAPI->setup(mWindow);
 }
 
 

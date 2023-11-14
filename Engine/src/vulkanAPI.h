@@ -10,8 +10,17 @@
 #include <vector>
 #include <array>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/hash.hpp>
 
 namespace myEngine {
+
+struct UniformBufferObject {
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
+};
 
 struct Vertex {
     glm::vec3 pos;
@@ -53,6 +62,20 @@ struct Vertex {
     }
 };
 
+}
+namespace std{
+template<> struct std::hash<myEngine::Vertex> {
+    size_t operator()(myEngine::Vertex const& vertex) const {
+        return ((std::hash<glm::vec3>()(vertex.pos) ^
+            (std::hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+            (std::hash<glm::vec2>()(vertex.texCoord) << 1);
+    }
+};
+}
+
+namespace myEngine {
+
+
 struct SwapChainSupportDetails {
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
@@ -77,6 +100,8 @@ class vulkanAPI :
 public:
     ~vulkanAPI();
     void setup(Window &window);
+
+    void drawFrame();
 
 private:
     Window* window;
@@ -118,8 +143,28 @@ private:
 
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
+
+    VkBuffer vertexBuffer;
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
+    VkDeviceMemory vertexBufferMemory;
+    VkBuffer indexBuffer;
+    VkDeviceMemory indexBufferMemory;
+
+
+    std::vector<VkBuffer> uniformBuffers;
+    std::vector<VkDeviceMemory> uniformBuffersMemory;
+    std::vector<void*> uniformBuffersMapped;
+
+    VkDescriptorPool descriptorPool;
+    std::vector<VkDescriptorSet> descriptorSets;
+
+    std::vector<VkCommandBuffer> commandBuffers;
+
+    std::vector<VkSemaphore> imageAvailableSemaphores;
+    std::vector<VkSemaphore> renderFinishedSemaphores;
+    std::vector<VkFence> inFlightFences;
+    uint32_t currentFrame = 0;
 
 private:
     void createInstance();
@@ -140,6 +185,19 @@ private:
     void createTextureImageView();
     void createTextureSampler();
     void loadModel();
+    void createVertexBuffer();
+    void createIndexBuffer();
+    void createUniformBuffers();
+    void createDescriptorPool();
+    void createDescriptorSets();
+    void createCommandBuffers();
+    void createSyncObjects();
+
+
+    void recreateSwapChain();
+    void updateUniformBuffer(uint32_t currentImage);
+    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
 
 
     VkCommandBuffer beginSingleTimeCommands();
@@ -154,6 +212,7 @@ private:
     VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels = 1);
     VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
     void cleanupSwapChain();
     VkShaderModule createShaderModule(const std::vector<char>& code);
 

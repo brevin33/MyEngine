@@ -23,6 +23,7 @@ void engine::mainLoop()
 {
 	while (!mWindow.shouldClose()) {
 		glfwPollEvents();
+		mGrapicsAPI->drawFrame();
 	}
 }
 

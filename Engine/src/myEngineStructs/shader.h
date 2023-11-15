@@ -6,6 +6,11 @@
 
 namespace myEngine {
 
+class ShaderSPV {
+public:
+    std::string vertShader;
+    std::string fragShader;
+};
 class VulkanGraphicsShader
 {
 public:

@@ -11,7 +11,6 @@
 #include <limits>
 #include <fstream>
 #include <stb_image.h>
-#include <tiny_obj_loader.h>
 #include <chrono>
 namespace myEngine {
 
@@ -32,8 +31,6 @@ const std::vector<const char*> deviceExtensions = {
 
 const std::string MODEL_PATH = "models/viking_room/viking_room.obj";
 const std::string TEXTURE_PATH = "models/viking_room/viking_room.png";
-
-const int MAX_FRAMES_IN_FLIGHT = 2;
 
 
 void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
@@ -59,26 +56,15 @@ vulkanAPI::~vulkanAPI()
 
     cleanupSwapChain();
 
+    objectsToRender.clear();
+
     vkDestroySampler(device, textureSampler, nullptr);
     vkDestroyImageView(device, textureImageView, nullptr);
     vkDestroyImage(device, textureImage, nullptr);
     vkFreeMemory(device, textureImageMemory, nullptr);
 
     vkDestroyRenderPass(device, renderPass, nullptr);
-    vkDestroyPipeline(device, graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
     vkDestroyCommandPool(device, commandPool, nullptr);
-
-    vkDestroyBuffer(device, indexBuffer, nullptr);
-    vkFreeMemory(device, indexBufferMemory, nullptr);
-
-    vkDestroyBuffer(device, vertexBuffer, nullptr);
-    vkFreeMemory(device, vertexBufferMemory, nullptr);
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vkDestroyBuffer(device, uniformBuffers[i], nullptr);
-        vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
-    }
 
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -116,7 +102,6 @@ void vulkanAPI::setup(Window &window)
     createImageViews();
     createRenderPass();
     createDescriptorSetLayout();
-    createGraphicsPipeline();
     createCommandPool();
     createColorResources();
     createDepthResources();
@@ -124,20 +109,29 @@ void vulkanAPI::setup(Window &window)
     createTextureImage();
     createTextureImageView();
     createTextureSampler();
-    loadModel();
-    createVertexBuffer();
-    createIndexBuffer();
-    createUniformBuffers();
     createDescriptorPool();
-    createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
 
 }
 
-RenderTarget vulkanAPI::createRenderTarget(Mesh mesh, VulkanGraphicsShader shader)
+uint32_t vulkanAPI::createObjectRenderer( Mesh& mesh, ShaderSPV& shader)
 {
-    return RenderTarget();
+    int i = objectsToRender.size();
+    objectsToRender.resize(i+1);
+
+    VulkanGraphicsShader s;
+    s.loadSPV(shader.vertShader,shader.fragShader,&device);
+
+    createGraphicsPipeline(s, objectsToRender[i].pipelineLayout, objectsToRender[i].graphicsPipeline, mesh.vertices[0]);
+    createVertexBuffer(mesh.vertices, objectsToRender[i].vertexBuffer, objectsToRender[i].vertexBufferMemory);
+    createIndexBuffer(mesh.indices, objectsToRender[i].indexBuffer, objectsToRender[i].indexBufferMemory);
+    createUniformBuffers(objectsToRender[i].uniformBuffers, objectsToRender[i].uniformBuffersMemory, objectsToRender[i].uniformBuffersMapped);
+    createDescriptorSets(objectsToRender[i].descriptorSets, objectsToRender[i].uniformBuffers);
+    objectsToRender[i].device = &device;
+    objectsToRender[i].indicesSize = mesh.indices.size();
+
+    return objectsToRender.size() - 1;
 }
 
 void vulkanAPI::drawFrame()
@@ -155,7 +149,10 @@ void vulkanAPI::drawFrame()
         throw std::runtime_error("failed to acquire swap chain image!");
     }
 
-    updateUniformBuffer(currentFrame);
+    for (size_t i = 0; i < objectsToRender.size(); i++)
+    {
+        updateUniformBuffer(currentFrame, objectsToRender[i].uniformBuffersMapped);
+    }
 
     vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
@@ -521,34 +518,13 @@ void vulkanAPI::createDescriptorSetLayout()
     }
 }
 
-void vulkanAPI::createGraphicsPipeline()
+void vulkanAPI::createGraphicsPipeline(VulkanGraphicsShader &shader, VkPipelineLayout &pipelineLayout, VkPipeline &graphicsPipeline, ColorAndTexureVertex &vertex)
 {
-
-    auto vertShaderCode = readFile("shaders/vert.spv");
-    auto fragShaderCode = readFile("shaders/frag.spv");
-
-    VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-    VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
-
-    VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-    vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vertShaderStageInfo.module = vertShaderModule;
-    vertShaderStageInfo.pName = "main";
-
-    VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragShaderStageInfo.module = fragShaderModule;
-    fragShaderStageInfo.pName = "main";
-
-    VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-    auto bindingDescription = Vertex2::getBindingDescription();
-    auto attributeDescriptions = Vertex2::getAttributeDescriptions();
+    auto bindingDescription = vertex.getBindingDescription();
+    auto attributeDescriptions = vertex.getAttributeDescriptions();
 
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
@@ -624,7 +600,7 @@ void vulkanAPI::createGraphicsPipeline()
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.stageCount = 2;
-    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pStages = shader.shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
     pipelineInfo.pViewportState = &viewportState;
@@ -641,9 +617,6 @@ void vulkanAPI::createGraphicsPipeline()
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
         throw std::runtime_error("failed to create graphics pipeline!");
     }
-
-    vkDestroyShaderModule(device, fragShaderModule, nullptr);
-    vkDestroyShaderModule(device, vertShaderModule, nullptr);
 }
 
 void vulkanAPI::createCommandPool()
@@ -772,46 +745,8 @@ void vulkanAPI::createTextureSampler()
     }
 }
 
-void vulkanAPI::loadModel()
-{
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn, err;
 
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
-        throw std::runtime_error(warn + err);
-    }
-
-    std::unordered_map<Vertex2, uint32_t> uniqueVertices;
-    for (const auto& shape : shapes) {
-        for (const auto& index : shape.mesh.indices) {
-            Vertex2 vertex{};
-
-            vertex.pos = {
-                attrib.vertices[3 * index.vertex_index + 0],
-                attrib.vertices[3 * index.vertex_index + 1],
-                attrib.vertices[3 * index.vertex_index + 2]
-            };
-
-            vertex.texCoord = {
-                attrib.texcoords[2 * index.texcoord_index + 0],
-                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-            };
-
-            vertex.color = { 1.0f, 1.0f, 1.0f };
-
-            if (uniqueVertices.count(vertex) == 0) {
-                uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-                vertices.push_back(vertex);
-            }
-
-            indices.push_back(uniqueVertices[vertex]);
-        }
-    }
-}
-
-void vulkanAPI::createVertexBuffer()
+void vulkanAPI::createVertexBuffer(const std::vector<ColorAndTexureVertex> &vertices ,VkBuffer &vertexBuffer, VkDeviceMemory &vertexBufferMemory)
 {
     VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
@@ -832,7 +767,7 @@ void vulkanAPI::createVertexBuffer()
     vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void vulkanAPI::createIndexBuffer()
+void vulkanAPI::createIndexBuffer(const std::vector<uint32_t>& indices, VkBuffer& indexBuffer, VkDeviceMemory& indexBufferMemory)
 {
     VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
@@ -853,7 +788,7 @@ void vulkanAPI::createIndexBuffer()
     vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void vulkanAPI::createUniformBuffers()
+void vulkanAPI::createUniformBuffers(std::vector<VkBuffer> &uniformBuffers, std::vector<VkDeviceMemory> &uniformBuffersMemory, std::vector<void*> &uniformBuffersMapped)
 {
     VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
@@ -887,7 +822,7 @@ void vulkanAPI::createDescriptorPool()
     }
 }
 
-void vulkanAPI::createDescriptorSets()
+void vulkanAPI::createDescriptorSets(std::vector<VkDescriptorSet> & descriptorSets, std::vector<VkBuffer>& uniformBuffers)
 {
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
     VkDescriptorSetAllocateInfo allocInfo{};
@@ -991,7 +926,7 @@ void vulkanAPI::recreateSwapChain()
     createFramebuffers();
 }
 
-void vulkanAPI::updateUniformBuffer(uint32_t currentImage)
+void vulkanAPI::updateUniformBuffer(uint32_t currentImage, std::vector<void*>& uniformBuffersMapped)
 {
     static auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -1032,7 +967,7 @@ void vulkanAPI::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,objectsToRender[0].graphicsPipeline);
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -1048,15 +983,20 @@ void vulkanAPI::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
     scissor.extent = swapChainExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    VkBuffer vertexBuffers[] = { vertexBuffer };
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    for (size_t i = 0; i < objectsToRender.size(); i++)
+    {
 
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        VkBuffer vertexBuffers[] = { objectsToRender[i].vertexBuffer };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+        vkCmdBindIndexBuffer(commandBuffer, objectsToRender[i].indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, objectsToRender[i].pipelineLayout, 0, 1, &objectsToRender[i].descriptorSets[currentFrame], 0, nullptr);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(objectsToRender[i].indicesSize), 1, 0, 0, 0);
+
+    }
 
     vkCmdEndRenderPass(commandBuffer);
 

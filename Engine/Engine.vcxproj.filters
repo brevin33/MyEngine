@@ -33,9 +33,6 @@
     <ClCompile Include="src\myEngineStructs\mesh.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\myEngineStructs\defaultVertexTypes.h">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\engine.h">
@@ -62,7 +59,7 @@
     <ClInclude Include="src\components\data\meshRenderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\myEngineStructs\renderTarget.h">
+    <ClInclude Include="src\myEngineStructs\objectRenderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

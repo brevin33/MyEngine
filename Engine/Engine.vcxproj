@@ -138,7 +138,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\myEngineStructs\defaultVertexTypes.h" />
     <ClCompile Include="src\myEngineStructs\mesh.cpp" />
     <ClCompile Include="src\myEngineStructs\shader.cpp" />
     <ClCompile Include="src\engine.cpp" />
@@ -149,7 +148,7 @@
   <ItemGroup>
     <ClInclude Include="src\components\data\meshRenderer.h" />
     <ClInclude Include="src\components\data\transform.h" />
-    <ClInclude Include="src\myEngineStructs\renderTarget.h" />
+    <ClInclude Include="src\myEngineStructs\objectRenderer.h" />
     <ClInclude Include="src\myEngineStructs\shader.h" />
     <ClInclude Include="src\definitions.h" />
     <ClInclude Include="src\engine.h" />

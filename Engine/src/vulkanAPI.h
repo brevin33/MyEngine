@@ -11,7 +11,7 @@
 #include <glm/gtx/hash.hpp>
 #include "myEngineStructs/mesh.h"
 #include "myEngineStructs/shader.h"
-#include "myEngineStructs/renderTarget.h"
+#include "myEngineStructs/objectRenderer.h"
 
 namespace myEngine {
 
@@ -21,55 +21,6 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
-struct Vertex2 {
-    glm::vec3 pos;
-    glm::vec3 color;
-    glm::vec2 texCoord;
-
-    bool operator==(const Vertex2& other) const {
-        return pos == other.pos && color == other.color && texCoord == other.texCoord;
-    }
-
-    static VkVertexInputBindingDescription getBindingDescription() {
-        VkVertexInputBindingDescription bindingDescription{};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex2);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-        return bindingDescription;
-    }
-
-    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
-
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex2, pos);
-
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex2, color);
-
-        attributeDescriptions[2].binding = 0;
-        attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[2].offset = offsetof(Vertex2, texCoord);
-
-        return attributeDescriptions;
-    }
-};
-
-}
-namespace std{
-template<> struct std::hash<myEngine::Vertex2> {
-    size_t operator()(myEngine::Vertex2 const& vertex) const {
-        return ((std::hash<glm::vec3>()(vertex.pos) ^
-            (std::hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
-            (std::hash<glm::vec2>()(vertex.texCoord) << 1);
-    }
-};
 }
 
 namespace myEngine {
@@ -99,7 +50,7 @@ public:
     ~vulkanAPI();
     void setup(Window &window);
 
-    RenderTarget createRenderTarget(Mesh mesh, VulkanGraphicsShader shader);
+    uint32_t createObjectRenderer( Mesh &mesh, ShaderSPV &shader);
 
     void drawFrame();
 
@@ -114,8 +65,6 @@ private:
     VkQueue presentQueue;
     VkRenderPass renderPass;
     VkDescriptorSetLayout descriptorSetLayout;
-    VkPipelineLayout pipelineLayout;
-    VkPipeline graphicsPipeline;
     VkCommandPool commandPool;
 
 
@@ -144,20 +93,7 @@ private:
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
 
-    VkBuffer vertexBuffer;
-    std::vector<Vertex2> vertices;
-    std::vector<uint32_t> indices;
-    VkDeviceMemory vertexBufferMemory;
-    VkBuffer indexBuffer;
-    VkDeviceMemory indexBufferMemory;
-
-
-    std::vector<VkBuffer> uniformBuffers;
-    std::vector<VkDeviceMemory> uniformBuffersMemory;
-    std::vector<void*> uniformBuffersMapped;
-
     VkDescriptorPool descriptorPool;
-    std::vector<VkDescriptorSet> descriptorSets;
 
     std::vector<VkCommandBuffer> commandBuffers;
 
@@ -165,6 +101,9 @@ private:
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
     uint32_t currentFrame = 0;
+
+
+    std::vector<ObjectRenderer> objectsToRender;
 
 private:
     void createInstance();
@@ -176,7 +115,6 @@ private:
     void createImageViews();
     void createRenderPass();
     void createDescriptorSetLayout();
-    void createGraphicsPipeline();
     void createCommandPool();
     void createColorResources();
     void createDepthResources();
@@ -184,19 +122,20 @@ private:
     void createTextureImage();
     void createTextureImageView();
     void createTextureSampler();
-    void loadModel();
-    void createVertexBuffer();
-    void createIndexBuffer();
-    void createUniformBuffers();
     void createDescriptorPool();
-    void createDescriptorSets();
     void createCommandBuffers();
     void createSyncObjects();
 
 
     void recreateSwapChain();
-    void updateUniformBuffer(uint32_t currentImage);
+    void updateUniformBuffer(uint32_t currentImage, std::vector<void*>& uniformBuffersMapped);
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+    void createVertexBuffer(const std::vector<ColorAndTexureVertex>& vertices, VkBuffer& vertexBuffer, VkDeviceMemory& vertexBufferMemory);
+    void createIndexBuffer(const std::vector<uint32_t>& indices, VkBuffer& indexBuffer, VkDeviceMemory& indexBufferMemory);
+    void createGraphicsPipeline(VulkanGraphicsShader& shader, VkPipelineLayout& pipelineLayout, VkPipeline& graphicsPipeline, ColorAndTexureVertex& vertex);
+    void createUniformBuffers(std::vector<VkBuffer>& uniformBuffers, std::vector<VkDeviceMemory>& uniformBuffersMemory, std::vector<void*>& uniformBuffersMapped);
+    void createDescriptorSets(std::vector<VkDescriptorSet>& descriptorSets, std::vector<VkBuffer> &uniformBuffers);
 
 
 

@@ -21,6 +21,8 @@ void engine::run(int width, int height)
 	shader.vertShader = "shaders/vert.spv";
 	shader.fragShader = "shaders/frag.spv";
 	mGrapicsAPI.createObjectRenderer(Viking_room,shader);
+	mGrapicsAPI.createObjectRenderer(Viking_room, shader);
+
 	mainLoop();
 }
 

@@ -54,9 +54,10 @@ vulkanAPI::~vulkanAPI()
 {
     vkDeviceWaitIdle(device);
 
-    cleanupSwapChain();
 
     objectsToRender.clear();
+
+    cleanupSwapChain();
 
     vkDestroySampler(device, textureSampler, nullptr);
     vkDestroyImageView(device, textureImageView, nullptr);
@@ -118,18 +119,18 @@ void vulkanAPI::setup(Window &window)
 uint32_t vulkanAPI::createObjectRenderer( Mesh& mesh, ShaderSPV& shader)
 {
     int i = objectsToRender.size();
-    objectsToRender.resize(i+1);
+    objectsToRender.push_back(std::make_unique<ObjectRenderer>());
 
     VulkanGraphicsShader s;
     s.loadSPV(shader.vertShader,shader.fragShader,&device);
 
-    createGraphicsPipeline(s, objectsToRender[i].pipelineLayout, objectsToRender[i].graphicsPipeline, mesh.vertices[0]);
-    createVertexBuffer(mesh.vertices, objectsToRender[i].vertexBuffer, objectsToRender[i].vertexBufferMemory);
-    createIndexBuffer(mesh.indices, objectsToRender[i].indexBuffer, objectsToRender[i].indexBufferMemory);
-    createUniformBuffers(objectsToRender[i].uniformBuffers, objectsToRender[i].uniformBuffersMemory, objectsToRender[i].uniformBuffersMapped);
-    createDescriptorSets(objectsToRender[i].descriptorSets, objectsToRender[i].uniformBuffers);
-    objectsToRender[i].device = &device;
-    objectsToRender[i].indicesSize = mesh.indices.size();
+    createGraphicsPipeline(s, objectsToRender[i]->pipelineLayout, objectsToRender[i]->graphicsPipeline, mesh.vertices[0]);
+    createVertexBuffer(mesh.vertices, objectsToRender[i]->vertexBuffer, objectsToRender[i]->vertexBufferMemory);
+    createIndexBuffer(mesh.indices, objectsToRender[i]->indexBuffer, objectsToRender[i]->indexBufferMemory);
+    createUniformBuffers(objectsToRender[i]->uniformBuffers, objectsToRender[i]->uniformBuffersMemory, objectsToRender[i]->uniformBuffersMapped);
+    createDescriptorSets(objectsToRender[i]->descriptorSets, objectsToRender[i]->uniformBuffers);
+    objectsToRender[i]->device = &device;
+    objectsToRender[i]->indicesSize = mesh.indices.size();
 
     return objectsToRender.size() - 1;
 }
@@ -142,6 +143,7 @@ void vulkanAPI::drawFrame()
     VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        window->pFramebufferResized = false;
         recreateSwapChain();
         return;
     }
@@ -151,7 +153,7 @@ void vulkanAPI::drawFrame()
 
     for (size_t i = 0; i < objectsToRender.size(); i++)
     {
-        updateUniformBuffer(currentFrame, objectsToRender[i].uniformBuffersMapped);
+        updateUniformBuffer(currentFrame, objectsToRender[i]->uniformBuffersMapped);
     }
 
     vkResetFences(device, 1, &inFlightFences[currentFrame]);
@@ -807,15 +809,15 @@ void vulkanAPI::createDescriptorPool()
 {
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)*2;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)*2;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)*2;
 
     if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor pool!");
@@ -919,9 +921,7 @@ void vulkanAPI::recreateSwapChain()
     cleanupSwapChain();
     createSwapChain();
     createImageViews();
-    createImageViews();
     createColorResources();
-    createDepthResources();
     createDepthResources();
     createFramebuffers();
 }
@@ -967,8 +967,6 @@ void vulkanAPI::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,objectsToRender[0].graphicsPipeline);
-
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -986,15 +984,16 @@ void vulkanAPI::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
     for (size_t i = 0; i < objectsToRender.size(); i++)
     {
 
-        VkBuffer vertexBuffers[] = { objectsToRender[i].vertexBuffer };
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, objectsToRender[i]->graphicsPipeline);
+        VkBuffer vertexBuffers[] = { objectsToRender[i]->vertexBuffer };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-        vkCmdBindIndexBuffer(commandBuffer, objectsToRender[i].indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, objectsToRender[i]->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, objectsToRender[i].pipelineLayout, 0, 1, &objectsToRender[i].descriptorSets[currentFrame], 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, objectsToRender[i]->pipelineLayout, 0, 1, &objectsToRender[i]->descriptorSets[currentFrame], 0, nullptr);
 
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(objectsToRender[i].indicesSize), 1, 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(objectsToRender[i]->indicesSize), 1, 0, 0, 0);
 
     }
 

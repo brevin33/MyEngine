@@ -12,6 +12,7 @@
 #include "myEngineStructs/mesh.h"
 #include "myEngineStructs/shader.h"
 #include "myEngineStructs/objectRenderer.h"
+#include <memory>
 
 namespace myEngine {
 
@@ -103,7 +104,7 @@ private:
     uint32_t currentFrame = 0;
 
 
-    std::vector<ObjectRenderer> objectsToRender;
+    std::vector<std::unique_ptr<ObjectRenderer>> objectsToRender;
 
 private:
     void createInstance();

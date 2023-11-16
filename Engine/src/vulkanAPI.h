@@ -48,10 +48,19 @@ struct QueueFamilyIndices {
 class vulkanAPI
 {
 public:
+    VkExtent2D swapChainExtent;
+
+public:
+
     ~vulkanAPI();
     void setup(Window &window);
 
-    uint32_t createObjectRenderer( Mesh &mesh, ShaderSPV &shader);
+
+    shaderID createShader(std::string vertShader, std::string FragShader, ColorAndTexureVertex v);
+    meshID createMesh(Mesh& mesh);
+    objectRendererID createObjectRenderer(shaderID shaderid, meshID meshid);
+    void setUBO(objectRendererID objectid, UniformBufferObject ubo);
+    void setUBOAll(objectRendererID objectid, UniformBufferObject ubo);
 
     void drawFrame();
 
@@ -79,7 +88,6 @@ private:
     VkSwapchainKHR swapChain;
     std::vector<VkImage> swapChainImages;
     VkFormat swapChainImageFormat;
-    VkExtent2D swapChainExtent;
     std::vector<VkImageView> swapChainImageViews;
     std::vector<VkFramebuffer> swapChainFramebuffers;
 
@@ -103,7 +111,8 @@ private:
     std::vector<VkFence> inFlightFences;
     uint32_t currentFrame = 0;
 
-
+    std::vector<std::unique_ptr<VKMesh>> meshes;
+    std::vector<std::unique_ptr<VKShader>> shaders;
     std::vector<std::unique_ptr<ObjectRenderer>> objectsToRender;
 
 private:
@@ -134,7 +143,7 @@ private:
 
     void createVertexBuffer(const std::vector<ColorAndTexureVertex>& vertices, VkBuffer& vertexBuffer, VkDeviceMemory& vertexBufferMemory);
     void createIndexBuffer(const std::vector<uint32_t>& indices, VkBuffer& indexBuffer, VkDeviceMemory& indexBufferMemory);
-    void createGraphicsPipeline(VulkanGraphicsShader& shader, VkPipelineLayout& pipelineLayout, VkPipeline& graphicsPipeline, ColorAndTexureVertex& vertex);
+    void createGraphicsPipeline(std::string shaderFilePathVert, std::string shaderFilePathFrag, VkPipelineLayout& pipelineLayout, VkPipeline& graphicsPipeline, ColorAndTexureVertex& vertex);
     void createUniformBuffers(std::vector<VkBuffer>& uniformBuffers, std::vector<VkDeviceMemory>& uniformBuffersMemory, std::vector<void*>& uniformBuffersMapped);
     void createDescriptorSets(std::vector<VkDescriptorSet>& descriptorSets, std::vector<VkBuffer> &uniformBuffers);
 

@@ -10,7 +10,7 @@ namespace myEngine{
 struct meshRenderer
 {
 	entityID id;
-
+	uint32_t objectRenderID;
 };
 
 }

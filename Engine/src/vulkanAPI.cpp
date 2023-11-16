@@ -56,6 +56,8 @@ vulkanAPI::~vulkanAPI()
 
 
     objectsToRender.clear();
+    shaders.clear();
+    meshes.clear();
 
     cleanupSwapChain();
 
@@ -116,27 +118,62 @@ void vulkanAPI::setup(Window &window)
 
 }
 
-uint32_t vulkanAPI::createObjectRenderer( Mesh& mesh, ShaderSPV& shader)
+shaderID vulkanAPI::createShader(std::string vertShader, std::string fragShader, ColorAndTexureVertex v)
+{
+    int i = shaders.size();
+    shaders.push_back(std::make_unique<VKShader>());
+    createGraphicsPipeline(vertShader,fragShader, shaders[i]->pipelineLayout, shaders[i]->graphicsPipeline, v);
+    shaders[i]->device = &device;
+
+    return i;
+}
+
+meshID vulkanAPI::createMesh(Mesh& mesh)
+{
+    int i = meshes.size();
+    meshes.push_back(std::make_unique<VKMesh>());
+
+    createVertexBuffer(mesh.vertices, meshes[i]->vertexBuffer, meshes[i]->vertexBufferMemory);
+    createIndexBuffer(mesh.indices, meshes[i]->indexBuffer, meshes[i]->indexBufferMemory);
+    meshes[i]->indicesSize = mesh.indices.size();
+    meshes[i]->device = &device;
+
+    return i;
+}
+
+objectRendererID vulkanAPI::createObjectRenderer( shaderID shaderid, meshID meshid)
 {
     int i = objectsToRender.size();
     objectsToRender.push_back(std::make_unique<ObjectRenderer>());
 
-    VulkanGraphicsShader s;
-    s.loadSPV(shader.vertShader,shader.fragShader,&device);
-
-    createGraphicsPipeline(s, objectsToRender[i]->pipelineLayout, objectsToRender[i]->graphicsPipeline, mesh.vertices[0]);
-    createVertexBuffer(mesh.vertices, objectsToRender[i]->vertexBuffer, objectsToRender[i]->vertexBufferMemory);
-    createIndexBuffer(mesh.indices, objectsToRender[i]->indexBuffer, objectsToRender[i]->indexBufferMemory);
     createUniformBuffers(objectsToRender[i]->uniformBuffers, objectsToRender[i]->uniformBuffersMemory, objectsToRender[i]->uniformBuffersMapped);
     createDescriptorSets(objectsToRender[i]->descriptorSets, objectsToRender[i]->uniformBuffers);
     objectsToRender[i]->device = &device;
-    objectsToRender[i]->indicesSize = mesh.indices.size();
-
+    objectsToRender[i]->meshid = meshid;
+    objectsToRender[i]->shaderid = shaderid;
     return objectsToRender.size() - 1;
 }
 
+void vulkanAPI::setUBO(objectRendererID objectid, UniformBufferObject ubo)
+{
+    memcpy(objectsToRender[objectid]->uniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
+}
+
+void vulkanAPI::setUBOAll(objectRendererID objectid, UniformBufferObject ubo)
+{
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        memcpy(objectsToRender[objectid]->uniformBuffersMapped[i], &ubo, sizeof(ubo));
+    }
+}
+
+
+
+
 void vulkanAPI::drawFrame()
 {
+
+
     vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex;
@@ -151,10 +188,6 @@ void vulkanAPI::drawFrame()
         throw std::runtime_error("failed to acquire swap chain image!");
     }
 
-    for (size_t i = 0; i < objectsToRender.size(); i++)
-    {
-        updateUniformBuffer(currentFrame, objectsToRender[i]->uniformBuffersMapped);
-    }
 
     vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
@@ -520,8 +553,31 @@ void vulkanAPI::createDescriptorSetLayout()
     }
 }
 
-void vulkanAPI::createGraphicsPipeline(VulkanGraphicsShader &shader, VkPipelineLayout &pipelineLayout, VkPipeline &graphicsPipeline, ColorAndTexureVertex &vertex)
+void vulkanAPI::createGraphicsPipeline(std::string shaderFilePathVert, std::string shaderFilePathFrag, VkPipelineLayout &pipelineLayout, VkPipeline &graphicsPipeline, ColorAndTexureVertex &vertex)
 {
+    this->device = device;
+    auto vertShaderCode = readFile(shaderFilePathVert);
+    auto fragShaderCode = readFile(shaderFilePathFrag);
+
+    VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+    VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+    VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+    vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertShaderStageInfo.module = vertShaderModule;
+    vertShaderStageInfo.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragShaderStageInfo.module = fragShaderModule;
+    fragShaderStageInfo.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[2];
+    shaderStages[0] = vertShaderStageInfo;
+    shaderStages[1] = fragShaderStageInfo;
+
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
@@ -602,7 +658,7 @@ void vulkanAPI::createGraphicsPipeline(VulkanGraphicsShader &shader, VkPipelineL
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineInfo.stageCount = 2;
-    pipelineInfo.pStages = shader.shaderStages;
+    pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
     pipelineInfo.pViewportState = &viewportState;
@@ -619,6 +675,9 @@ void vulkanAPI::createGraphicsPipeline(VulkanGraphicsShader &shader, VkPipelineL
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
         throw std::runtime_error("failed to create graphics pipeline!");
     }
+
+    vkDestroyShaderModule(device, vertShaderModule, nullptr);
+    vkDestroyShaderModule(device, fragShaderModule, nullptr);
 }
 
 void vulkanAPI::createCommandPool()
@@ -908,6 +967,8 @@ void vulkanAPI::createSyncObjects()
     }
 }
 
+
+
 void vulkanAPI::recreateSwapChain()
 {
     int width = 0, height = 0;
@@ -984,16 +1045,16 @@ void vulkanAPI::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imag
     for (size_t i = 0; i < objectsToRender.size(); i++)
     {
 
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, objectsToRender[i]->graphicsPipeline);
-        VkBuffer vertexBuffers[] = { objectsToRender[i]->vertexBuffer };
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shaders[objectsToRender[i]->shaderid]->graphicsPipeline);
+        VkBuffer vertexBuffers[] = { meshes[ objectsToRender[i]->meshid]->vertexBuffer };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-        vkCmdBindIndexBuffer(commandBuffer, objectsToRender[i]->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(commandBuffer, meshes[objectsToRender[i]->meshid]->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, objectsToRender[i]->pipelineLayout, 0, 1, &objectsToRender[i]->descriptorSets[currentFrame], 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, shaders[objectsToRender[i]->shaderid]->pipelineLayout, 0, 1, &objectsToRender[i]->descriptorSets[currentFrame], 0, nullptr);
 
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(objectsToRender[i]->indicesSize), 1, 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(meshes[objectsToRender[i]->meshid]->indicesSize), 1, 0, 0, 0);
 
     }
 

@@ -139,7 +139,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\myEngineStructs\mesh.cpp" />
-    <ClCompile Include="src\myEngineStructs\shader.cpp" />
     <ClCompile Include="src\engine.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\vulkanAPI.cpp" />

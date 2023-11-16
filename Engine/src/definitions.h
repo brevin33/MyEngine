@@ -7,5 +7,8 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #define entityID uint16_t
+#define meshID uint16_t
+#define shaderID uint16_t
+#define objectRendererID uint16_t
 
-const int MAX_FRAMES_IN_FLIGHT = 2;
+const int MAX_FRAMES_IN_FLIGHT = 3;

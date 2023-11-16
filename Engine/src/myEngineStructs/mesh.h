@@ -67,6 +67,29 @@ struct Mesh {
     void loadFromOBJ(std::string filepath, bool colorComponent = false, bool textureComponent = true);
 };
 
+
+struct VKMesh {
+
+    VKMesh() {}
+
+    ~VKMesh() {
+        vkDestroyBuffer(*device, indexBuffer, nullptr);
+        vkFreeMemory(*device, indexBufferMemory, nullptr);
+
+        vkDestroyBuffer(*device, vertexBuffer, nullptr);
+        vkFreeMemory(*device, vertexBufferMemory, nullptr);
+    }
+
+    VkBuffer vertexBuffer;
+    VkDeviceMemory vertexBufferMemory;
+    VkBuffer indexBuffer;
+    VkDeviceMemory indexBufferMemory;
+    uint32_t indicesSize;
+    VkDevice* device;
+
+};
+
+
 }
 
 
